@@ -1,9 +1,7 @@
-ARG ALPINE_VERSION
-FROM alpine:${ALPINE_VERSION}
-ARG TARGETARCH
+ARG POSTGRES_VERSION ''
 
-ADD src/install.sh install.sh
-RUN sh install.sh && rm install.sh
+FROM postgres:${POSTGRES_VERSION}
+ARG TARGETARCH
 
 ENV POSTGRES_DATABASE ''
 ENV POSTGRES_HOST ''
@@ -22,9 +20,12 @@ ENV SCHEDULE ''
 ENV PASSPHRASE ''
 ENV BACKUP_KEEP_DAYS ''
 
+ADD src/install.sh install.sh
+RUN sh install.sh && rm install.sh
+
 ADD src/run.sh run.sh
 ADD src/env.sh env.sh
 ADD src/backup.sh backup.sh
 ADD src/restore.sh restore.sh
 
-CMD ["sh", "run.sh"]
+ENTRYPOINT ["/bin/bash", "run.sh"]

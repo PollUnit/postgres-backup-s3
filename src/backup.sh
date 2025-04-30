@@ -1,7 +1,6 @@
-#! /bin/sh
+#! /bin/bash
 
-set -eu
-set -o pipefail
+set -eux
 
 source ./env.sh
 
@@ -10,7 +9,7 @@ pg_dump --format=custom \
         -h $POSTGRES_HOST \
         -p $POSTGRES_PORT \
         -U $POSTGRES_USER \
-        -d $POSTGRES_DATABASE \
+        $POSTGRES_DATABASE \
         $PGDUMP_EXTRA_OPTS \
         > db.dump
 
