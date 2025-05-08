@@ -1,22 +1,50 @@
-#! /bin/bash
+#!/bin/bash
 
-set -eux
+set -euo pipefail
 
 source ./env.sh
 
+# Function to send error to Rollbar
+notify_rollbar() {
+  local message="$1"
+  local level="${2:-error}"
+  curl -s -o /dev/null -X POST "https://api.rollbar.com/api/1/item/" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"access_token\": \"$ROLLBAR_TOKEN\",
+      \"data\": {
+        \"environment\": \"production\",
+        \"level\": \"CRITICAL\",
+        \"body\": {
+          \"message\": {
+            \"body\": \"$message\"
+          }
+        },
+        \"server\": {
+          \"host\": \"$(hostname)\"
+        },
+        \"custom\": {
+          \"script\": \"db_backup.sh\"
+        }
+      }
+    }"
+}
+
+trap 'notify_rollbar "Database backup script failed at line $LINENO."' ERR
+
 echo "Creating backup of $POSTGRES_DATABASE database..."
 pg_dump --format=custom \
-        -h $POSTGRES_HOST \
-        -p $POSTGRES_PORT \
-        -U $POSTGRES_USER \
-        $POSTGRES_DATABASE \
+        -h "$POSTGRES_HOST" \
+        -p "$POSTGRES_PORT" \
+        -U "$POSTGRES_USER" \
+        "$POSTGRES_DATABASE" \
         $PGDUMP_EXTRA_OPTS \
         > db.dump
 
 timestamp=$(date +"%Y-%m-%dT%H:%M:%S")
 s3_uri_base="s3://${S3_BUCKET}/${S3_PREFIX}/${POSTGRES_DATABASE}_${timestamp}.dump"
 
-if [ -n "$PASSPHRASE" ]; then
+if [ -n "${PASSPHRASE:-}" ]; then
   echo "Encrypting backup..."
   rm -f db.dump.gpg
   gpg --symmetric --batch --passphrase "$PASSPHRASE" db.dump
@@ -34,7 +62,7 @@ rm "$local_file"
 
 echo "Backup complete."
 
-if [ -n "$BACKUP_KEEP_DAYS" ]; then
+if [ -n "${BACKUP_KEEP_DAYS:-}" ]; then
   sec=$((86400*BACKUP_KEEP_DAYS))
   date_from_remove=$(date -d "@$(($(date +%s) - sec))" +%Y-%m-%d)
   backups_query="Contents[?LastModified<='${date_from_remove} 00:00:00'].{Key: Key}"
